@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Site {
+  id           Int          @id @default(autoincrement())
+  title        String
+  url          String
+  instruction  String
+  lastCheckedAt DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  logs         UpdateLog[]
+}
+
+model UpdateLog {
+  id          Int      @id @default(autoincrement())
+  siteId      Int
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  hasChange   Boolean
+  summary     String
+  fullContent String?
+  createdAt   DateTime @default(now())
+}
