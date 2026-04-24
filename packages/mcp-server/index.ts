@@ -25,6 +25,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
+        name: "check_all_sites",
+        description: "巡回の定型作業: 全登録サイトのHTML取得・変更検知・保存をまとめて実行する。初回は過去ログなしでチェックし、結果を返す。",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
         name: "get_target_sites",
         description: "Fetch a list of registered websites to monitor for updates.",
         inputSchema: {
@@ -64,91 +72,61 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 /**
  * Handle tool calls.
  */
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  switch (request.params.name) {
-    case "get_target_sites": {
-      const sites = await prisma.site.findMany();
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(sites, null, 2),
-          },
-        ],
-      };
-    }
+const scrape = async (url: string): Promise<string> => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+  const html = await response.text();
+  return html
+    .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
+    .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gim, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 10000);
+};
 
-    case "scrape_site_content": {
-      const { url } = request.params.arguments as { url: string };
-      try {
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
-        }
-        const html = await response.text();
-        
-        // Simple text extraction (stripping scripts and styles)
-        // Note: For better results, use cheerio or a similar library.
-        const cleanContent = html
-          .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
-          .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gim, "")
-          .replace(/<[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .trim()
-          .slice(0, 10000); // Limit to avoid hitting token limits
+const detectChange = (current: string, previous: string | null): boolean => {
+  if (!previous) return false;
+  return current !== previous;
+};
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: cleanContent,
-            },
-          ],
-        };
-      } catch (error: any) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: `Error scraping site: ${error.message}`,
-            },
-          ],
-        };
-      }
-    }
+const buildResult = (sites: any[], results: any[], logs: any[]): string => {
+  const lines = sites.map((site, i) => {
+    const r = results[i];
+    const log = logs[i];
+    return `## ${site.title} (id:${site.id})\n- URL: ${site.url}\n- 変化: ${r.hasChange ? "あり" : "なし"}\n- 要約: ${log.summary}`;
+  }).join("\n\n");
+  return `巡回去了完了:${sites.length}件\n${lines}`;
+};
 
-    case "save_update_log": {
-      const { siteId, hasChange, summary, fullContent } = request.params.arguments as any;
-      
-      const log = await prisma.updateLog.create({
+server.setRequestHandler(CallToolRequestSchema, async () => {
+  const sites = await prisma.site.findMany();
+  const lastLogs = await Promise.all(
+    sites.map((s) => prisma.updateLog.findFirst({ where: { siteId: s.id }, orderBy: { createdAt: "desc" } }))
+  );
+  const htmls = await Promise.allSettled(sites.map((s) => scrape(s.url)));
+  const results = await Promise.all(
+    sites.map(async (site, i) => {
+      const html = htmls[i];
+      if (html.status === "rejected") return { site, html: null, hasChange: false };
+      const prev = lastLogs[i]?.fullContent ?? null;
+      return { site, html: html.value, hasChange: detectChange(html.value, prev) };
+    })
+  );
+  const logs = await Promise.all(
+    results.map((r) =>
+      prisma.updateLog.create({
         data: {
-          siteId,
-          hasChange,
-          summary,
-          fullContent,
+          siteId: r.site.id,
+          hasChange: r.hasChange,
+          summary: r.html ? `(${r.hasChange ? "変化あり" : "変化なし"}) ${r.html.slice(0, 200)}` : "取得エラー",
+          fullContent: r.html ?? null,
         },
-      });
-
-      // Update the lastCheckedAt field of the site
-      await prisma.site.update({
-        where: { id: siteId },
-        data: { lastCheckedAt: new Date() },
-      });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Log saved successfully (ID: ${log.id})`,
-          },
-        ],
-      };
-    }
-
-    default:
-      throw new Error("Tool not found");
-  }
+      })
+    )
+  );
+  await Promise.all(sites.map((s) => prisma.site.update({ where: { id: s.id }, data: { lastCheckedAt: new Date() } })));
+  return { content: [{ type: "text", text: buildResult(sites, results, logs) }] };
 });
 
 /**

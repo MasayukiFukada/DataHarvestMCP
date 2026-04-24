@@ -1,6 +1,7 @@
 import { prisma } from "db";
 import { revalidatePath } from "next/cache";
 import { Suspense } from "react";
+import SiteCard from "./SiteCard";
 
 async function getSites() {
   return await prisma.site.findMany({
@@ -41,6 +42,26 @@ async function deleteSite(formData: FormData) {
   revalidatePath("/");
 }
 
+async function updateSite(formData: FormData) {
+  "use server";
+  const id = Number(formData.get("id"));
+  const title = formData.get("title") as string;
+  const url = formData.get("url") as string;
+  const instruction = formData.get("instruction") as string;
+
+  if (id && title && url) {
+    await prisma.site.update({
+      where: { id },
+      data: {
+        title,
+        url,
+        instruction: instruction || "Check for any updates on this page.",
+      },
+    });
+    revalidatePath("/");
+  }
+}
+
 async function SiteList() {
   const sites = await getSites();
 
@@ -52,46 +73,12 @@ async function SiteList() {
         </div>
       ) : (
         sites.map((site) => (
-          <div key={site.id} className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="p-6">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">{site.title}</h3>
-                  <a href={site.url} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline">
-                    {site.url}
-                  </a>
-                </div>
-                <form action={deleteSite}>
-                  <input type="hidden" name="id" value={site.id} />
-                  <button type="submit" className="text-red-500 hover:text-red-700 text-sm">Delete</button>
-                </form>
-              </div>
-
-              <div className="mb-4">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Instruction</h4>
-                <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded">{site.instruction}</p>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Latest Check</h4>
-                {site.logs[0] ? (
-                  <div className={`p-3 rounded text-sm ${site.logs[0].hasChange ? 'bg-yellow-50 border border-yellow-200' : 'bg-green-50 border border-green-200'}`}>
-                    <div className="flex justify-between mb-1">
-                      <span className={`font-bold ${site.logs[0].hasChange ? 'text-yellow-800' : 'text-green-800'}`}>
-                        {site.logs[0].hasChange ? 'Update Detected!' : 'No Changes'}
-                      </span>
-                      <span className="text-gray-500 text-xs">
-                        {new Date(site.logs[0].createdAt).toLocaleString()}
-                      </span>
-                    </div>
-                    <p className="text-gray-700">{site.logs[0].summary}</p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-400 italic">Never checked yet.</p>
-                )}
-              </div>
-            </div>
-          </div>
+          <SiteCard
+            key={site.id}
+            site={site}
+            onUpdate={updateSite}
+            onDelete={deleteSite}
+          />
         ))
       )}
     </div>
