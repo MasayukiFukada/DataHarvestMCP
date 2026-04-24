@@ -1,6 +1,6 @@
-# TemplateMCP
+# DataHarvestMCP
 
-AIが操作するモデルコンテキストプロトコル（MCP）サーバーと、人間が操作するNext.js管理画面をSQLiteで統合したテンプレートプロジェクトです。
+Webサイトの更新チェックを自動化するMCPサーバーとNext.js管理画面をSQLiteで統合したプロジェクトです。
 
 ## 技術スタック
 
@@ -12,7 +12,7 @@ AIが操作するモデルコンテキストプロトコル（MCP）サーバー
 ## プロジェクト構造
 
 ```
-TemplateMCP/
+DataHarvestMCP/
 ├── packages/
 │   ├── db/            # Prismaスキーマ、SQLite接続、共有DBクライアント
 │   ├── admin-ui/      # Next.js管理画面
@@ -48,35 +48,35 @@ cd packages/admin-ui
 npm run dev
 ```
 
-`http://localhost:3000` で管理画面にアクセスできます。人物とその好物を登録してください。
+`http://localhost:3000` で管理画面にアクセスできます。監視対象のWebsitesを登録してください。
 
 ### MCPサーバー (stdio)
 
 MCPクライアント（Claude Desktopなど）から以下のコマンドで起動します。
 
 ```bash
-npx tsx /path/to/TemplateMCP/packages/mcp-server/index.ts
+npx tsx /path/to/DataHarvestMCP/packages/mcp-server/index.ts
 ```
 
-geminiの場合はこんな感じで設定する
+Claude Desktopの場合は `claude_desktop_config.json` に以下のように設定します:
 
-```
-"mcpServers": {
-  "template-mcp": {
-    "command": "npx",
-    "args": [
-      "-y",
-      "tsx",
-      "/home/minamo/repository/TemplateMCP/packages/mcp-server/index.ts"
-    ]
+```json
+{
+  "mcpServers": {
+    "dataharvest-mcp": {
+      "command": "npx",
+      "args": ["-y", "tsx", "/path/to/DataHarvestMCP/packages/mcp-server/index.ts"]
+    }
   }
 }
 ```
 
 #### 提供されるツール
 
-- `greet_and_suggest_all`: データベースに登録された全員に挨拶し、好物に基づいたメニューを提案します。
-  - **新機能**: TheMealDB API と連携し、ユーザーの好みに合った実際の料理名を Web から取得して提案に含めます。和食、中華、イタリアンなどの主要なカテゴリに対応しています。
+- `check_all_sites`: 全登録サイトのHTML取得・変更検知・保存をまとめて実行します。初回は過去ログなしでチェックし、結果を返します。
+- `get_target_sites`: 監視対象のWebsitesリストを取得します。
+- `scrape_site_content`: 指定したURLのHTMLを取得し、テキストを抽出します。
+- `save_update_log`: Webサイトのチェック結果をDBに保存します。
 
 ## 開発ガイド
 
