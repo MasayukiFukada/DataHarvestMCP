@@ -73,7 +73,6 @@ Claude Desktopの場合は `claude_desktop_config.json` に以下のように設
 
 #### 提供されるツール
 
-- `check_all_sites`: 全登録サイトのHTML取得・変更検知・保存をまとめて実行します。初回は過去ログなしでチェックし、結果を返します。
 - `get_target_sites`: 監視対象のWebsitesリストを取得します。
 - `scrape_site_content`: 指定したURLのHTMLを取得し、テキストを抽出します。
 - `save_update_log`: Webサイトのチェック結果をDBに保存します。

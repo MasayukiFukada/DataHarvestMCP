@@ -8,7 +8,6 @@
 - [x] サンプル実装 (Person/FavoriteFood の管理)
 - [x] Phase 1: DBスキーマ (Site, UpdateLog)
 - [x] Phase 2: MCPサーバ & ツール実装
-  - [x] `check_all_sites`: 全サイト巡回（HTML取得・変更検知・保存の定型作業）
   - [x] `get_target_sites`: サイト一覧取得
   - [x] `scrape_site_content`: 特定URLのHTML取得
   - [x] `save_update_log`: 手動でログ保存
@@ -18,7 +17,6 @@
 
 | ツール名 | 用途 |
 |----------|------|
-| `check_all_sites` | **定型巡回**: 全サイトのHTML取得・変更検知・結果をDBに保存 |
 | `get_target_sites` | 登録サイトの一覧取得 |
 | `scrape_site_content` | 特定URLを詳しく見たい時 |
 | `save_update_log` | 手動でメモ残しときたい時 |
@@ -31,7 +29,6 @@
 - [x] prisma generate とマイグレーションの実行
 
 ### Phase 2: MCPサーバの実装 (mcp-server)
-- [x] `check_all_sites`: 定型巡回ツール（HTML取得・変更検知・保存）
 - [x] `get_target_sites`: DBから監視対象のサイト一覧を取得
 - [x] `scrape_site_content`: 指定URLをスクレイピング
 - [x] `save_update_log`: 分析結果をDBに保存

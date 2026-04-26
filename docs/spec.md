@@ -73,9 +73,8 @@ DataHarvestMCP/
 
 | ツール名 | 説明 |
 |--------|------|
-| `check_all_sites` | 全登録サイトのHTML取得・変更検知・保存を成章実行 |
 | `get_target_sites` | 監視対象のWebsitesリストを取得 |
-| `scrape_site_content` | 指定URLのHTMLを取得・テキスト抽出 |
+| `scrape_site_content` | 指定URLのHTML取得・テキスト抽出 |
 | `save_update_log` | Webサイトのチェック結果をDBに保存 |
 
 ## 巡回フロー

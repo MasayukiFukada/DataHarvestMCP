@@ -62,7 +62,6 @@
 ## 知識＆ライブラリ（Knowledge & Library）
 
 - **MCP (Model Context Protocol)**: AIが外部ツールと通信するためのプロトコル。
-- **巡回ワークフロー**: `check_all_sites`を呼び出すと、全サイトの巡回・変更検知・保存が自動で行われる。
 
 ## メンテナンス・ポリシー（Maintenance policy）
 

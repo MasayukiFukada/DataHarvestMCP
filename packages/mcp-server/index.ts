@@ -63,14 +63,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["siteId", "hasChange", "summary"],
         },
       },
-      {
-        name: "check_all_sites",
-        description: "【定型作業】全サイトを巡回し、自動的にスクレイピングと簡易な変更検知を実行します。",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
-      },
     ],
   };
 });
@@ -122,45 +114,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         return {
           content: [{ type: "text", text: `Log saved for site ${siteId}. Log ID: ${log.id}` }],
-        };
-      }
-
-      case "check_all_sites": {
-        const sites = await prisma.site.findMany();
-        const lastLogs = await Promise.all(
-          sites.map((s) => prisma.updateLog.findFirst({ where: { siteId: s.id }, orderBy: { createdAt: "desc" } }))
-        );
-
-        const results = await Promise.all(
-          sites.map(async (site, i) => {
-            try {
-              const res = await scraperManager.scrape(site.url, site.scraperId);
-              const prev = lastLogs[i]?.fullContent ?? null;
-              const hasChange = prev ? res.content !== prev : false;
-
-              await prisma.updateLog.create({
-                data: {
-                  siteId: site.id,
-                  hasChange,
-                  summary: `(Auto-check) ${hasChange ? "変化あり" : "変化なし"}: ${res.content.slice(0, 100)}`,
-                  fullContent: res.content,
-                },
-              });
-
-              await prisma.site.update({
-                where: { id: site.id },
-                data: { lastCheckedAt: new Date() },
-              });
-
-              return { id: site.id, title: site.title, status: "success", hasChange };
-            } catch (err) {
-              return { id: site.id, title: site.title, status: "error", error: String(err) };
-            }
-          })
-        );
-
-        return {
-          content: [{ type: "text", text: `Checked ${sites.length} sites.\n${JSON.stringify(results, null, 2)}` }],
         };
       }
 
