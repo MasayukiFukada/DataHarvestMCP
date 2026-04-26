@@ -19,6 +19,7 @@ export default function SiteCard({ site, onUpdate, onDelete }: SiteCardProps) {
     title: site.title,
     url: site.url,
     instruction: site.instruction,
+    scraperId: site.scraperId || "",
   });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -34,6 +35,7 @@ export default function SiteCard({ site, onUpdate, onDelete }: SiteCardProps) {
       title: site.title,
       url: site.url,
       instruction: site.instruction,
+      scraperId: site.scraperId || "",
     });
     setIsEditing(false);
   };
@@ -44,15 +46,27 @@ export default function SiteCard({ site, onUpdate, onDelete }: SiteCardProps) {
         <form onSubmit={handleSubmit} className="p-6">
           <h3 className="text-lg font-bold text-gray-800 mb-4">Edit Site</h3>
           <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Site Title</label>
-              <input
-                name="title"
-                type="text"
-                required
-                defaultValue={formData.title}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2 text-black"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Site Title</label>
+                <input
+                  name="title"
+                  type="text"
+                  required
+                  defaultValue={formData.title}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2 text-black"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Scraper ID</label>
+                <input
+                  name="scraperId"
+                  type="text"
+                  defaultValue={formData.scraperId}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2 text-black"
+                  placeholder="yahoo_news"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">URL</label>
@@ -100,9 +114,16 @@ export default function SiteCard({ site, onUpdate, onDelete }: SiteCardProps) {
         <div className="flex justify-between items-start mb-4">
           <div>
             <h3 className="text-lg font-bold text-gray-900">{site.title}</h3>
-            <a href={site.url} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline">
-              {site.url}
-            </a>
+            <div className="flex gap-2 items-center">
+              <a href={site.url} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline">
+                {site.url}
+              </a>
+              {site.scraperId && (
+                <span className="bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded border border-gray-200">
+                  Scraper: {site.scraperId}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex gap-4">
             <button

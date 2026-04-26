@@ -12,6 +12,7 @@ model Site {
   title        String
   url          String
   instruction  String
+  scraperId    String?      // スクレイパー識別子 (例: "yahoo_news")
   lastCheckedAt DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt

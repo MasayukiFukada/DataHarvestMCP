@@ -2,9 +2,14 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
+  ErrorCode,
   ListToolsRequestSchema,
+  McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import { prisma } from "db";
+import { ScraperManager } from "./scrapers/manager.js";
+
+const scraperManager = new ScraperManager();
 
 const server = new Server(
   {
@@ -25,16 +30,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "check_all_sites",
-        description: "巡回の定型作業: 全登録サイトのHTML取得・変更検知・保存をまとめて実行する。初回は過去ログなしでチェックし、結果を返す。",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
-      },
-      {
         name: "get_target_sites",
-        description: "Fetch a list of registered websites to monitor for updates.",
+        description: "監視対象のWebサイトリストをDBから取得します。",
         inputSchema: {
           type: "object",
           properties: {},
@@ -42,27 +39,36 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "scrape_site_content",
-        description: "Fetches the HTML content of a specific site and extracts text for analysis.",
+        description: "指定したURLのWebサイトをスクレイピングし、テキストを抽出します。scraperIdが指定されている場合は専用スクリプトを使用します。",
         inputSchema: {
           type: "object",
           properties: {
-            url: { type: "string", description: "The URL of the website to scrape." },
+            url: { type: "string", description: "スクレイピング対象のURL" },
+            scraperId: { type: "string", description: "使用するスクレイパーの識別子（任意）" },
           },
           required: ["url"],
         },
       },
       {
         name: "save_update_log",
-        description: "Saves the analysis result of a website check into the database.",
+        description: "Webサイトのチェック結果（変更の有無、要約、現在のコンテンツ）をDBに保存します。",
         inputSchema: {
           type: "object",
           properties: {
-            siteId: { type: "number", description: "The ID of the site being checked." },
-            hasChange: { type: "boolean", description: "Whether any significant change was detected." },
-            summary: { type: "string", description: "A concise summary of the changes or the current state." },
-            fullContent: { type: "string", description: "The content observed during this check for future comparison." },
+            siteId: { type: "number", description: "サイトのID" },
+            hasChange: { type: "boolean", description: "前回から重要な変更があったか" },
+            summary: { type: "string", description: "AIによる変更内容の要約" },
+            fullContent: { type: "string", description: "今回取得したコンテンツ全体（比較用）" },
           },
           required: ["siteId", "hasChange", "summary"],
+        },
+      },
+      {
+        name: "check_all_sites",
+        description: "【定型作業】全サイトを巡回し、自動的にスクレイピングと簡易な変更検知を実行します。",
+        inputSchema: {
+          type: "object",
+          properties: {},
         },
       },
     ],
@@ -72,61 +78,101 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 /**
  * Handle tool calls.
  */
-const scrape = async (url: string): Promise<string> => {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
-  const html = await response.text();
-  return html
-    .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
-    .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gim, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 10000);
-};
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
 
-const detectChange = (current: string, previous: string | null): boolean => {
-  if (!previous) return false;
-  return current !== previous;
-};
+  try {
+    switch (name) {
+      case "get_target_sites": {
+        const sites = await prisma.site.findMany();
+        return {
+          content: [{ type: "text", text: JSON.stringify(sites, null, 2) }],
+        };
+      }
 
-const buildResult = (sites: any[], results: any[], logs: any[]): string => {
-  const lines = sites.map((site, i) => {
-    const r = results[i];
-    const log = logs[i];
-    return `## ${site.title} (id:${site.id})\n- URL: ${site.url}\n- 変化: ${r.hasChange ? "あり" : "なし"}\n- 要約: ${log.summary}`;
-  }).join("\n\n");
-  return `巡回去了完了:${sites.length}件\n${lines}`;
-};
+      case "scrape_site_content": {
+        const { url, scraperId } = args as { url: string; scraperId?: string };
+        const result = await scraperManager.scrape(url, scraperId);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
 
-server.setRequestHandler(CallToolRequestSchema, async () => {
-  const sites = await prisma.site.findMany();
-  const lastLogs = await Promise.all(
-    sites.map((s) => prisma.updateLog.findFirst({ where: { siteId: s.id }, orderBy: { createdAt: "desc" } }))
-  );
-  const htmls = await Promise.allSettled(sites.map((s) => scrape(s.url)));
-  const results = await Promise.all(
-    sites.map(async (site, i) => {
-      const html = htmls[i];
-      if (html.status === "rejected") return { site, html: null, hasChange: false };
-      const prev = lastLogs[i]?.fullContent ?? null;
-      return { site, html: html.value, hasChange: detectChange(html.value, prev) };
-    })
-  );
-  const logs = await Promise.all(
-    results.map((r) =>
-      prisma.updateLog.create({
-        data: {
-          siteId: r.site.id,
-          hasChange: r.hasChange,
-          summary: r.html ? `(${r.hasChange ? "変化あり" : "変化なし"}) ${r.html.slice(0, 200)}` : "取得エラー",
-          fullContent: r.html ?? null,
-        },
-      })
-    )
-  );
-  await Promise.all(sites.map((s) => prisma.site.update({ where: { id: s.id }, data: { lastCheckedAt: new Date() } })));
-  return { content: [{ type: "text", text: buildResult(sites, results, logs) }] };
+      case "save_update_log": {
+        const { siteId, hasChange, summary, fullContent } = args as {
+          siteId: number;
+          hasChange: boolean;
+          summary: string;
+          fullContent?: string;
+        };
+
+        const log = await prisma.updateLog.create({
+          data: {
+            siteId,
+            hasChange,
+            summary,
+            fullContent,
+          },
+        });
+
+        await prisma.site.update({
+          where: { id: siteId },
+          data: { lastCheckedAt: new Date() },
+        });
+
+        return {
+          content: [{ type: "text", text: `Log saved for site ${siteId}. Log ID: ${log.id}` }],
+        };
+      }
+
+      case "check_all_sites": {
+        const sites = await prisma.site.findMany();
+        const lastLogs = await Promise.all(
+          sites.map((s) => prisma.updateLog.findFirst({ where: { siteId: s.id }, orderBy: { createdAt: "desc" } }))
+        );
+
+        const results = await Promise.all(
+          sites.map(async (site, i) => {
+            try {
+              const res = await scraperManager.scrape(site.url, site.scraperId);
+              const prev = lastLogs[i]?.fullContent ?? null;
+              const hasChange = prev ? res.content !== prev : false;
+
+              await prisma.updateLog.create({
+                data: {
+                  siteId: site.id,
+                  hasChange,
+                  summary: `(Auto-check) ${hasChange ? "変化あり" : "変化なし"}: ${res.content.slice(0, 100)}`,
+                  fullContent: res.content,
+                },
+              });
+
+              await prisma.site.update({
+                where: { id: site.id },
+                data: { lastCheckedAt: new Date() },
+              });
+
+              return { id: site.id, title: site.title, status: "success", hasChange };
+            } catch (err) {
+              return { id: site.id, title: site.title, status: "error", error: String(err) };
+            }
+          })
+        );
+
+        return {
+          content: [{ type: "text", text: `Checked ${sites.length} sites.\n${JSON.stringify(results, null, 2)}` }],
+        };
+      }
+
+      default:
+        throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+    }
+  } catch (error: any) {
+    return {
+      content: [{ type: "text", text: `Error: ${error.message}` }],
+      isError: true,
+    };
+  }
 });
 
 /**

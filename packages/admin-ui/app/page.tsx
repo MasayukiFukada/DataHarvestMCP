@@ -20,6 +20,7 @@ async function addSite(formData: FormData) {
   const title = formData.get("title") as string;
   const url = formData.get("url") as string;
   const instruction = formData.get("instruction") as string;
+  const scraperId = formData.get("scraperId") as string;
 
   if (title && url) {
     await prisma.site.create({
@@ -27,6 +28,7 @@ async function addSite(formData: FormData) {
         title,
         url,
         instruction: instruction || "Check for any updates on this page.",
+        scraperId: scraperId || null,
       },
     });
     revalidatePath("/");
@@ -48,6 +50,7 @@ async function updateSite(formData: FormData) {
   const title = formData.get("title") as string;
   const url = formData.get("url") as string;
   const instruction = formData.get("instruction") as string;
+  const scraperId = formData.get("scraperId") as string;
 
   if (id && title && url) {
     await prisma.site.update({
@@ -56,6 +59,7 @@ async function updateSite(formData: FormData) {
         title,
         url,
         instruction: instruction || "Check for any updates on this page.",
+        scraperId: scraperId || null,
       },
     });
     revalidatePath("/");
@@ -95,7 +99,7 @@ export default async function Home() {
           <section className="mb-8">
             <h2 className="text-xl font-semibold mb-4 text-gray-700">Register New Site</h2>
             <form action={addSite} className="grid grid-cols-1 gap-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Site Title</label>
                   <input
@@ -114,6 +118,15 @@ export default async function Home() {
                     required
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2 text-black"
                     placeholder="https://example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Scraper ID (Optional)</label>
+                  <input
+                    name="scraperId"
+                    type="text"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2 text-black"
+                    placeholder="yahoo_news"
                   />
                 </div>
               </div>
